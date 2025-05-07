@@ -1,0 +1,54 @@
+<input type="file" id="audioFile" accept="audio/*" />
+<h2 id="noteDisplay">♪ ドレミ解析中...</h2>
+
+<script>
+document.getElementById('audioFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const arrayBuffer = await file.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    const freqData = new Uint8Array(analyser.frequencyBinCount);
+
+    source.connect(analyser);
+    analyser.connect(audioContext.destination);
+    source.start();
+
+    function getFrequency(index, sampleRate, fftSize) {
+        return index * sampleRate / fftSize;
+    }
+
+    function freqToNoteName(freq) {
+        if (freq < 20 || freq > 5000) return "？";
+        const noteNames = ["ド", "ド♯", "レ", "レ♯", "ミ", "ファ", "ファ♯", "ソ", "ソ♯", "ラ", "ラ♯", "シ"];
+        const noteNumber = 12 * (Math.log2(freq / 440)) + 69;
+        const rounded = Math.round(noteNumber);
+        const name = noteNames[rounded % 12];
+        const octave = Math.floor(rounded / 12) - 1;
+        return `${name}${octave}`;
+    }
+
+    const noteDisplay = document.getElementById("noteDisplay");
+
+    const interval = setInterval(() => {
+        analyser.getByteFrequencyData(freqData);
+        const maxIndex = freqData.indexOf(Math.max(...freqData));
+        const freq = getFrequency(maxIndex, audioContext.sampleRate, analyser.fftSize);
+        const note = freqToNoteName(freq);
+        noteDisplay.textContent = `♪ 今の音：${note}`;
+    }, 300);
+
+    // 自動停止
+    setTimeout(() => {
+        clearInterval(interval);
+        noteDisplay.textContent += "（終了）";
+    }, audioBuffer.duration * 1000 + 500);
+});
+</script>
