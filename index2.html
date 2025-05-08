@@ -17,15 +17,22 @@
 .key.active {
   background: orange;
 }
+#history {
+  margin-top: 20px;
+  font-size: 1.2em;
+  font-family: sans-serif;
+}
 </style>
 
-<input type="file" id="audioFile" accept=".mp3,.wav" />
+<input type="file" id="audioFile" accept="audio/*,video/*" />
 <h2 id="noteDisplay">♪ ドレミ解析待ち</h2>
 <div id="keyboard"></div>
+<div id="history"><b>♪ 検出されたドレミ：</b> <span id="noteHistory"></span></div>
 
 <script>
 const noteNames = ["ド", "ド♯", "レ", "レ♯", "ミ", "ファ", "ファ♯", "ソ", "ソ♯", "ラ", "ラ♯", "シ"];
 const keyboardDiv = document.getElementById("keyboard");
+const historySpan = document.getElementById("noteHistory");
 
 // 2オクターブ分の鍵盤を作る（C3～B4）
 const midiStart = 48; // C3
@@ -78,15 +85,21 @@ document.getElementById('audioFile').addEventListener('change', async (e) => {
   source.start();
 
   const noteDisplay = document.getElementById("noteDisplay");
+  const noteHistory = [];
+  historySpan.textContent = "";
 
+  let lastMidi = null;
   const interval = setInterval(() => {
     analyser.getByteFrequencyData(freqData);
     const maxIndex = freqData.indexOf(Math.max(...freqData));
     const freq = maxIndex * audioContext.sampleRate / analyser.fftSize;
     const note = freqToNote(freq);
-    if (note) {
+    if (note && note.midi !== lastMidi) {
+      lastMidi = note.midi;
       noteDisplay.textContent = `♪ 今の音：${note.label}`;
       highlightKey(note.midi);
+      noteHistory.push(note.name);
+      historySpan.textContent = noteHistory.join(" ");
     }
   }, 300);
 
