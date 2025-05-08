@@ -1,0 +1,99 @@
+<style>
+#keyboard {
+  display: flex;
+  margin-top: 20px;
+  height: 100px;
+}
+.key {
+  width: 40px;
+  border: 1px solid #000;
+  background: white;
+  position: relative;
+  text-align: center;
+  line-height: 100px;
+  font-weight: bold;
+  font-family: sans-serif;
+}
+.key.active {
+  background: orange;
+}
+</style>
+
+<input type="file" id="audioFile" accept=".mp3,.wav" />
+<h2 id="noteDisplay">♪ ドレミ解析待ち</h2>
+<div id="keyboard"></div>
+
+<script>
+const noteNames = ["ド", "ド♯", "レ", "レ♯", "ミ", "ファ", "ファ♯", "ソ", "ソ♯", "ラ", "ラ♯", "シ"];
+const keyboardDiv = document.getElementById("keyboard");
+
+// 2オクターブ分の鍵盤を作る（C3～B4）
+const midiStart = 48; // C3
+const midiEnd = 71;   // B4
+
+const keys = [];
+for (let midi = midiStart; midi <= midiEnd; midi++) {
+  const noteName = noteNames[midi % 12];
+  const key = document.createElement("div");
+  key.className = "key";
+  key.dataset.midi = midi;
+  key.textContent = noteName;
+  keyboardDiv.appendChild(key);
+  keys.push(key);
+}
+
+// ドレミ名とオクターブを返す
+function freqToNote(freq) {
+  if (freq < 20 || freq > 5000) return null;
+  const noteNum = 12 * Math.log2(freq / 440) + 69;
+  const rounded = Math.round(noteNum);
+  const name = noteNames[rounded % 12];
+  const octave = Math.floor(rounded / 12) - 1;
+  return { name, midi: rounded, label: `${name}${octave}` };
+}
+
+function highlightKey(midi) {
+  keys.forEach(k => k.classList.remove("active"));
+  const key = keys.find(k => parseInt(k.dataset.midi) === midi);
+  if (key) key.classList.add("active");
+}
+
+document.getElementById('audioFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const arrayBuffer = await file.arrayBuffer();
+  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+  const source = audioContext.createBufferSource();
+  source.buffer = audioBuffer;
+
+  const analyser = audioContext.createAnalyser();
+  analyser.fftSize = 2048;
+  const freqData = new Uint8Array(analyser.frequencyBinCount);
+
+  source.connect(analyser);
+  analyser.connect(audioContext.destination);
+  source.start();
+
+  const noteDisplay = document.getElementById("noteDisplay");
+
+  const interval = setInterval(() => {
+    analyser.getByteFrequencyData(freqData);
+    const maxIndex = freqData.indexOf(Math.max(...freqData));
+    const freq = maxIndex * audioContext.sampleRate / analyser.fftSize;
+    const note = freqToNote(freq);
+    if (note) {
+      noteDisplay.textContent = `♪ 今の音：${note.label}`;
+      highlightKey(note.midi);
+    }
+  }, 300);
+
+  setTimeout(() => {
+    clearInterval(interval);
+    noteDisplay.textContent += "（終了）";
+    keys.forEach(k => k.classList.remove("active"));
+  }, audioBuffer.duration * 1000 + 500);
+});
+</script>
